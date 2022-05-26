@@ -56,21 +56,56 @@ precision highp float;in vec3 i_Position;void main(){gl_Position=vec4(i_Position
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-void main()
-{
-    // Convert frag coordinates into image coordinates
-    ivec2 uv = ivec2(gl_FragCoord.x, u_Resolution.y - gl_FragCoord.y);
+vec4 texelAt(ivec2 uv) {
+    // Retrieves the RGBA texel value at (u, v)
 
     // Clamp image coordinates to valid texel coordinates
     uv = clamp(uv, ivec2(0), u_ImageResolution);
 
     // Get texel color
-    vec4 texel = texelFetch(u_Image, uv, 0).rgba;
+    vec4 texel = texelFetch(u_Image, uv, 0);
 
-    // Vary red channel value based on time
-    texel.r *= abs(sin(u_Time));
+    return texel;
+}
 
-    // Set frag color to modified texel color
+float prewitt_x(ivec2 uv) {
+    // Computes the Prewitt finite difference convolution filter along the x-axis centred at (u, v)
+
+    // Texel offset
+    ivec2 offset = ivec2(1, 0);
+    vec4 diff0 = texelAt(uv - offset) - texelAt(uv + offset);
+
+    offset = ivec2(1, -1);
+    vec4 diff1 = texelAt(uv - offset) - texelAt(uv + offset);
+
+    offset = ivec2(1, 1);
+    vec4 diff2 = texelAt(uv - offset) - texelAt(uv + offset);
+
+    // Compute arithemetic mean of the magnitude of differences
+    float gradient = (length(diff0) + length(diff1) + length(diff2)) / 3.;
+
+    return gradient;
+}
+
+void main()
+{
+    // Convert frag coordinates into image coordinates
+    ivec2 uv = ivec2(gl_FragCoord.x, u_Resolution.y - gl_FragCoord.y);
+
+    // Create sliding window effect to contrast the filtered and normal image
+    float alpha = .5 * (1.01 + sin(u_Time));
+    int threshold = int(alpha * float(u_ImageResolution.x));
+
+    vec4 texel = vec4(0., 0., 0., 1.);
+
+    // If frag is less than threshold then display filtered, otherwise display normal
+    if (uv.x >= threshold || uv.x > u_ImageResolution.x || uv.y > u_ImageResolution.y) {
+        texel = texelAt(uv);
+    } else {
+        texel.rgb = vec3(prewitt_x(uv));
+    }
+
+    // Set frag color to computed texel color
     o_FragColor = vec4(texel);
 }
 `
