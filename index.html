@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raymarcher</title>
+    <style>
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+
+            background: #16161D;
+            height: 100%;
+            width: 100%;
+
+            display: flex;
+
+            justify-content: center;
+            align-items: center;
+        }
+
+        #inputs,
+        #inputs textarea,
+        #inputs input {
+            display: block;
+            color: hsl(222, 19%, 89%);
+        }
+
+        #shadercode {
+            display: block;
+            background: #16161D;
+            font-family: 'Fantasque Sans Mono', 'Courier New', monospace;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="editor" width="900" height="900"></canvas>
+    <div id="inputs">
+        <textarea name="shadercode" id="shadercode" cols="100" rows="60"></textarea>
+        <input type="file" name="input" id="input">
+    </div>
+    <script type="text/x-fragment-shader" id="viewport">#version 300 es
+precision highp float;in vec3 i_Position;void main(){gl_Position=vec4(i_Position,1.);}</script>
+    <script>
+        const shaderInput = document.getElementById("shadercode")
+
+        shaderInput.value = `#define USE_DEFAULT_HEADER
+
+/*
+ * Copyright (c) 2022, Brandon G. Nguyen (brandon@nguyen.vc)
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
+void main()
+{
+    // Convert frag coordinates into image coordinates
+    ivec2 uv = ivec2(gl_FragCoord.x, u_Resolution.y - gl_FragCoord.y);
+
+    // Clamp image coordinates to valid texel coordinates
+    uv = clamp(uv, ivec2(0), u_ImageResolution);
+
+    // Get texel color
+    vec4 texel = texelFetch(u_Image, uv, 0).rgba;
+
+    // Vary red channel value based on time
+    texel.r *= abs(sin(u_Time));
+
+    // Set frag color to modified texel color
+    o_FragColor = vec4(texel);
+}
+`
+    </script>
+    <script type="module">
+        import { Editor } from "./js/editor.js"
+
+        const input = document.getElementById("input")
+
+        input.addEventListener("change", e => {
+            // TODO: Add support for multiple images
+            const parent = input.parentElement
+            input.remove()
+
+            const file = input.files[0]
+            const reader = new FileReader()
+
+            reader.addEventListener("load", e => {
+                // TODO: This all feels hackish; does there exist a better method?
+                const image = new Image()
+
+                image.src = e.target.result
+
+                image.addEventListener("load", () => {
+                    const canvas = document.createElement("canvas")
+                    canvas.width = image.width
+                    canvas.height = image.height
+                    const context = canvas.getContext("2d")
+                    context.drawImage(image, 0, 0)
+
+                    const imageData = context.getImageData(0, 0, image.width, image.height)
+
+                    const script = document.createElement("script")
+                    script.id = "frag"
+                    script.type = "text/x-fragment-shader"
+                    script.innerHTML = shaderInput.value
+
+                    document.body.appendChild(script)
+
+                    const editor = new Editor(imageData)
+
+                    const recompile = document.createElement("button")
+                    recompile.innerHTML = "Compile Shader"
+                    parent.appendChild(recompile)
+
+                    recompile.addEventListener("click", () => {
+                        script.innerHTML = shaderInput.value
+
+                        editor.workspace.createProgram()
+                    })
+                })
+            })
+
+            reader.readAsDataURL(file)
+        })
+    </script>
+</body>
+
+</html>
