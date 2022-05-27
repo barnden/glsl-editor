@@ -188,8 +188,9 @@ class Editor {
 
         const getCoordinates = e => {
             const coords = (typeof (e.touches) === "undefined") ? e : e.touches[0]
+            const bounding = this.renderer.canvas.getBoundingClientRect()
 
-            return [coords.clientX, coords.clientY]
+            return [coords.clientX - bounding.left, coords.clientY - bounding.top]
         }
 
         const moveHandler = e => this.mousePosition = getCoordinates(e)
